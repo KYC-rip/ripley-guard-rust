@@ -10,7 +10,7 @@ use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tokio::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Clone)]
 struct RipleyGuardOptions {
@@ -93,6 +93,12 @@ async fn handle_protected(
 ) -> impl IntoResponse {
     let auth_header = headers.get(header::AUTHORIZATION);
     
+    let client_ip = headers
+        .get("cf-connecting-ip")
+        .and_then(|v| v.to_str().ok())
+        .or_else(|| headers.get("x-forwarded-for").and_then(|v| v.to_str().ok()))
+        .unwrap_or("unknown-ip");
+
     // Generate stateless nonce
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -100,10 +106,15 @@ async fn handle_protected(
         .as_millis() as u64;
     let time_window = timestamp / options.expire_window_ms;
     
-    let mut hasher = Sha256::new();
-    let raw_data = format!("unknown-ip:{}:{}", time_window, options.server_secret);
-    hasher.update(raw_data.as_bytes());
-    let expected_nonce = hex::encode(&hasher.finalize()[..8]); // 16 chars
+    let generate_nonce = |window: u64| {
+        let mut hasher = Sha256::new();
+        let raw_data = format!("{}:{}:{}", client_ip, window, options.server_secret);
+        hasher.update(raw_data.as_bytes());
+        hex::encode(&hasher.finalize()[..8]) // 16 chars
+    };
+
+    let expected_nonce = generate_nonce(time_window);
+    let prev_nonce = generate_nonce(time_window.saturating_sub(1));
 
     // 1. Challenge: Issue XMR402 challenge
     if auth_header.is_none() || !auth_header.unwrap().to_str().unwrap_or("").starts_with("XMR402") {
@@ -128,7 +139,8 @@ async fn handle_protected(
         let proof = &caps[2];
 
         // 3. Verify Proof
-        if verify_proof_on_chain(&options, txid, proof, &expected_nonce).await {
+        if verify_proof_on_chain(&options, txid, proof, &expected_nonce).await ||
+           verify_proof_on_chain(&options, txid, proof, &prev_nonce).await {
             (
                 StatusCode::OK,
                 Json(json!({ 
