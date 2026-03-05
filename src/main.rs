@@ -95,6 +95,7 @@ async fn verify_proof_on_chain(
 async fn handle_protected(
     State(options): State<Arc<RipleyGuardOptions>>,
     headers: HeaderMap,
+    body: axum::body::Bytes, // Instruction Binding: Extract body for hashing
 ) -> impl IntoResponse {
     let auth_header = headers.get(header::AUTHORIZATION);
     
@@ -103,6 +104,13 @@ async fn handle_protected(
         .and_then(|v| v.to_str().ok())
         .or_else(|| headers.get("x-forwarded-for").and_then(|v| v.to_str().ok()))
         .unwrap_or("unknown-ip");
+
+    // Instruction Binding: Hash the body to prevent instruction replacement attacks
+    let body_hash = {
+        let mut hasher = Sha256::new();
+        hasher.update(&body);
+        hex::encode(hasher.finalize())
+    };
 
     // Generate stateless nonce
     let timestamp = SystemTime::now()
@@ -113,7 +121,7 @@ async fn handle_protected(
     
     let generate_nonce = |window: u64| {
         let mut hasher = Sha256::new();
-        let raw_data = format!("{}:{}:{}", client_ip, window, options.server_secret);
+        let raw_data = format!("{}:{}:{}:{}", client_ip, body_hash, window, options.server_secret);
         hasher.update(raw_data.as_bytes());
         hex::encode(&hasher.finalize()[..8]) // 16 chars
     };
@@ -127,8 +135,8 @@ async fn handle_protected(
             StatusCode::PAYMENT_REQUIRED,
             [
                 (header::WWW_AUTHENTICATE, format!(
-                    r#"XMR402 address="{}", amount="{}", message="{}""#,
-                    options.wallet_address, options.amount_piconero, expected_nonce
+                    r#"XMR402 address="{}", amount="{}", message="{}", timestamp="{}""#,
+                    options.wallet_address, options.amount_piconero, expected_nonce, timestamp
                 )),
             ],
             Json(json!({ "error": "TACTICAL_PAYMENT_REQUIRED", "protocol": "XMR402" })),

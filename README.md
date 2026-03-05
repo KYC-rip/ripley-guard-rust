@@ -8,10 +8,10 @@ Industrial-grade Monero payment gating for modern APIs. IETF-compliant, 0-conf e
 
 ## Features
 
-- **XMR402 Compliance**: Strict adherence to the IETF HTTP 402 standard.
+- **Instruction Binding**: Cryptographically binds nonces to request bodies to prevent instruction replacement.
+- **XMR402 Compliance**: Strict adherence to the IETF HTTP 402 standard with `timestamp` synchronization.
 - **0-Conf Verification**: Fast-path resource unlocking via transaction proofs.
 - **Async Execution**: Non-blocking RPC verification using `reqwest` and `tokio`.
-- **Sovereign Security**: Local-first verification with automatic failover to KYC.RIP nodes.
 
 ## Installation
 
