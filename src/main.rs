@@ -58,9 +58,14 @@ async fn verify_proof_on_chain(
     proof: &str,
     message: &str,
 ) -> bool {
+    let mut rpc_url = options.node_rpc_url.clone();
+    if !rpc_url.ends_with("/json_rpc") {
+        rpc_url = format!("{}/json_rpc", rpc_url.trim_end_matches('/'));
+    }
+
     let client = reqwest::Client::new();
     let res = client
-        .post(&options.node_rpc_url)
+        .post(&rpc_url)
         .json(&json!({
             "jsonrpc": "2.0",
             "id": "ripley-guard-rust",
