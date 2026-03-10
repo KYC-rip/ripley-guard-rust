@@ -1,61 +1,54 @@
-# Ripley Guard (Rust)
+# 🛡️ Ripley Guard (Rust)
 
-Industrial-grade Monero payment gating for modern APIs. IETF-compliant, 0-conf enabled, and built for the sovereign internet.
+> **XMR402 v2.0**: High-performance, transport-agnostic Monero payment gating.
 
-## Overview
+Refactored for the v2.0 decoupled architecture, `ripley-guard-rust` provides a lightning-fast implementation of the XMR402 protocol for Axum and other asynchronous Rust web frameworks.
 
-`ripley-guard-rust` is a lightning-fast asynchronous middleware for the Axum and Tower ecosystems. It implements the **XMR402 Protocol**, providing a tactical solution for monetizing API resources with absolute Monero privacy.
+## ⚡ Features
 
-## Features
+* **Modular Design**: Separate `core`, `http`, and `ws` modules for maximum flexibility.
+* **Axum Native**: First-class support for Axum middlewares and WebSocket upgrades.
+* **Payload Binding**: Intent-bound nonces (HMAC) to prevent instruction replacement.
+* **0-Conf Verification**: Direct Monero RPC integration for instant resource unlocking.
 
-- **Instruction Binding**: Cryptographically binds nonces to request bodies to prevent instruction replacement.
-- **XMR402 Compliance**: Strict adherence to the IETF HTTP 402 standard with `timestamp` synchronization.
-- **0-Conf Verification**: Fast-path resource unlocking via transaction proofs.
-- **Async Execution**: Non-blocking RPC verification using `reqwest` and `tokio`.
+## 🚀 Usage
 
-## Installation
+### HTTP Gating (Axum)
 
-Add this to your `Cargo.toml`:
+```rust
+use axum::{routing::post, Router};
+mod http;
 
-```toml
-[dependencies]
-ripley-guard = { git = "https://github.com/KYC-rip/ripley-guard-rust" }
+let app = Router::new()
+    .route("/protected", post(http::handle_protected))
+    .with_state(options);
 ```
 
-## Quick Start (Axum)
+### WebSocket Relay
 
 ```rust
 use axum::{routing::get, Router};
-use ripley_guard::{RipleyGuard, RipleyGuardOptions};
-use std::sync::Arc;
+mod ws;
 
-#[tokio::main]
-async fn main() {
-    let options = Arc::new(RipleyGuardOptions {
-        node_rpc_url: "http://127.0.0.1:18081/json_rpc".to_string(),
-        wallet_address: "888tNkbaB65ad3hgE9R916PP56bdz1c9v...".to_string(),
-        amount_piconero: 3000000,
-        server_secret: "rust-tactical-secret".to_string(),
-        expire_window_ms: 300000,
-    });
-
-    let app = Router::new()
-        .route("/api/resource", get(protected_handler))
-        .layer(RipleyGuard::new(options));
-
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:8081").await.unwrap();
-    axum::serve(listener, app).await.unwrap();
-}
-
-async fn protected_handler() -> &'static str {
-    "Sovereign Content Unlocked"
-}
+let app = Router::new()
+    .route("/relay", get(ws::handler))
+    .with_state(options);
 ```
 
-## Protocol
+## ⚙️ Configuration
 
-For a detailed protocol specification, visit [XMR402.org](https://xmr402.org).
+Requires a Monero RPC node and a server secret for stateless nonce generation.
+
+```rust
+let options = RipleyGuardOptions {
+    node_rpc_url: "http://127.0.0.1:18081".to_string(),
+    wallet_address: "888t...".to_string(),
+    amount_piconero: 1000,
+    server_secret: "v2-tactical-secret".to_string(),
+    expire_window_ms: 300000,
+};
+```
 
 ## License
 
-MIT © [KYC.rip](https://kyc.rip)
+MIT © [XBToshi](https://x.com/xbtoshi) / [KYC.rip](https://kyc.rip)
